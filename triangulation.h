@@ -18,6 +18,10 @@ class Triangulation{
 public:
 	Triangulation();
 	~Triangulation();
+	// read pcd files
+	void readPCDFiles(std::string &fileName);
+	// save points data using .pcd formate
+	void writePCDFiles(std::string &fileName);
 	//这个是不带颜色信息的点云快速三角网格化
 	void showTriangulation(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud);
 	//这个是带颜色信息的点云快速三角网格化

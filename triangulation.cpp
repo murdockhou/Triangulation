@@ -112,3 +112,42 @@ void Triangulation::showTriangulationRGB(pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
 
 	return ;
 }
+/***********************************************************
+*readPCDFiles函数，读取pcd文件
+*输入：string类型的文件名
+*输出：无
+*
+***********************************************************/
+void Triangulation::readPCDFiles(std::string &fileName){
+	// load points without rgb
+	/*pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+	if (pcl::io::loadPCDFile<pcl::PointXYZ>(fileName, *cloud) == -1){
+		std::cout << "Load file error!";
+		return ;
+	}*/
+
+	// load points with rgb
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloudRGB (new pcl::PointCloud<pcl::PointXYZRGB>);
+	if (pcl::io::loadPCDFile<pcl::PointXYZRGB>(fileName, *cloudRGB) == -1){
+		std::cout << "Load file error!";
+		return ;
+	}
+
+	return ;
+}
+
+/***********************************************************
+*writePCDFiles函数，保存写入pcd文件
+*输入：string类型的文件名
+*输出：已string为名字的pcd文件
+*
+***********************************************************/
+void Triangulation::writePCDFiles(std::string &fileName){
+	// we assume that we already have a points data named cloud
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PCDWriter writer;
+	writer.write<pcl::PointXYZ>(fileName,*cloud,false);
+	//pcl::io::savePCDFile(fileName,*cloud,false);
+
+	return ;
+}
