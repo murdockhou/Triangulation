@@ -151,3 +151,135 @@ void Triangulation::writePCDFiles(std::string &fileName){
 
 	return ;
 }
+/***********************************************************
+*vtkSmooth函数，根据vtk来平滑点云数据
+*输入：指向点云数据的cloud指针
+*输出：smooth过后的点云数据
+*
+***********************************************************/
+void Triangulation::vtkSmooth(pcl::PointCloud<pcl::PointXYZ>::Ptr finalcloud){
+	//Create parabola over cloud of points
+	vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
+	for (size_t i=0; i<finalcloud->points.size(); ++i){
+		double x = (double)finalcloud->points[i].x;
+		double y = (double)finalcloud->points[i].y;
+		double z = (double)finalcloud->points[i].z;	
+		points->InsertNextPoint(x,y,z);
+		
+	}
+	
+	//Add the  points to a polydata object
+	vtkSmartPointer<vtkPolyData> inputPolyData = vtkSmartPointer<vtkPolyData>::New();
+
+	inputPolyData->SetPoints(points);
+
+	//Triangulate the grid points
+	vtkSmartPointer<vtkDelaunay2D> delaunay = vtkSmartPointer<vtkDelaunay2D>::New();
+#if VTK_MAJOR_VERSION <= 5
+	delaunay->SetInput(inputPolyData);
+#else
+	delaunay->SetInputData(inputPolyData);
+#endif
+	delaunay->Update();
+	//Do smooth,最重要的是SetNumberOfIterations函数，参数意思为迭代次数，越大，拟合的越光滑，但会失去更多的信息
+	vtkSmartPointer<vtkSmoothPolyDataFilter> smoothFilter = vtkSmartPointer<vtkSmoothPolyDataFilter>::New();
+	smoothFilter->SetInputConnection(delaunay->GetOutputPort());
+	smoothFilter->SetNumberOfIterations(10);
+	smoothFilter->SetRelaxationFactor(0.1);
+	smoothFilter->FeatureEdgeSmoothingOff();
+	smoothFilter->BoundarySmoothingOn();
+	smoothFilter->Update();
+
+	//Update normals on newly smoothed polydata
+	vtkSmartPointer<vtkPolyDataNormals> normalGenerator = vtkSmartPointer<vtkPolyDataNormals>::New();
+	normalGenerator->SetInputConnection(smoothFilter->GetOutputPort());
+	normalGenerator->ComputePointNormalsOn();
+	normalGenerator->ComputeCellNormalsOn();
+	normalGenerator->Update();
+
+
+	//Make colors by hsw
+	//update 2016-4-6 20:45PM
+	vtkPolyData* outputPolyData = normalGenerator->GetOutput();
+
+	double bounds[6];
+	outputPolyData->GetBounds(bounds);
+
+	// Find min and max z
+	double minz = bounds[4];
+	double maxz = bounds[5];
+
+	/*std::cout << "minz: " << minz << std::endl;
+	std::cout << "maxz: " << maxz << std::endl;*/
+
+	// Create the color map
+	vtkSmartPointer<vtkLookupTable> colorLookupTable = vtkSmartPointer<vtkLookupTable>::New();
+	colorLookupTable->SetTableRange(minz, maxz);
+	colorLookupTable->Build();
+
+	// Generate the colors for each point based on the color map
+	vtkSmartPointer<vtkUnsignedCharArray> colors = vtkSmartPointer<vtkUnsignedCharArray>::New();
+	colors->SetNumberOfComponents(3);
+	colors->SetName("Colors");
+	//make color base on the z
+	for(int i = 0; i < outputPolyData->GetNumberOfPoints(); i++)
+	{
+		double p[3];
+		outputPolyData->GetPoint(i,p);
+		
+		double dcolor[3];
+		colorLookupTable->GetColor(p[2], dcolor);
+		unsigned char color[3];
+		for(unsigned int j = 0; j < 3; j++)
+		{
+			color[j] = static_cast<unsigned char>(255.0 * dcolor[j]);
+		}
+		
+#if VTK_MAJOR_VERSION < 7
+		colors->InsertNextTupleValue(color);
+#else
+		colors->InsertNextTypedTuple(color);
+#endif
+	}
+
+	outputPolyData->GetPointData()->SetScalars(colors);
+
+	// Create a mapper and actor
+	vtkSmartPointer<vtkPolyDataMapper> mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+#if VTK_MAJOR_VERSION <= 5
+	mapper->SetInputConnection(outputPolyData->GetProducerPort());
+#else
+	mapper->SetInputData(outputPolyData);
+#endif
+	//写ply文件
+	vtkSmartPointer<vtkPLYWriter> writer = vtkSmartPointer<vtkPLYWriter>::New();
+	writer->SetArrayName("Colors");
+	writer->SetInputConnection(outputPolyData->GetProducerPort());
+	writer->SetFileName("GroundPointsDEM");
+	writer->Update();
+	writer->Write();
+
+	std::string plyName = "vtkSmooth.ply";
+	//z_GroundPoints2(finalcloud,plyName,outputPolyData);
+	vtkSmartPointer<vtkActor> actor = vtkSmartPointer<vtkActor>::New();
+	actor->SetMapper(mapper);
+
+	// Create a renderer, render window, and interactor
+	vtkSmartPointer<vtkRenderer> renderer = vtkSmartPointer<vtkRenderer>::New();
+	vtkSmartPointer<vtkRenderWindow> renderWindow = vtkSmartPointer<vtkRenderWindow>::New();
+	renderWindow->AddRenderer(renderer);
+	renderWindow->SetSize(1000,562);
+	vtkSmartPointer<vtkRenderWindowInteractor> renderWindowInteractor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
+	renderWindowInteractor->SetRenderWindow(renderWindow);
+
+	// Add the actor to the scene
+	renderer->AddActor(actor);
+	renderer->SetBackground(.1, .2, .3);
+
+	// Render and interact
+	renderWindow->Render();
+	renderWindowInteractor->Start();
+
+	
+	return ;
+}
